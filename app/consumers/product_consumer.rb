@@ -12,7 +12,17 @@ class ProductConsumer
 
       case data['event']
       when 'created'
-        puts ("Received message: #{data.inspect}")
+        product = {
+          id: data["id"],
+          name: data["name"],
+          created_at: data["created_at"],
+          categories: data["categories"],
+          characters: data["characters"],
+          images: data["images"],
+          price: data["price"],
+          status: data["status"],
+      }
+        ElasticsearchService.index(product)
       when 'updated'
         puts ("Received message: #{data.inspect}")
       when 'deleted'
