@@ -1,3 +1,5 @@
+# - todo
+#       + Boost search results by some metrics (views, sales)
 class ElasticsearchService
   INDEX_NAME = "products"
 
@@ -167,5 +169,11 @@ class ElasticsearchService
       categories_count: response.dig("aggregations", "categories_count", "by_slug", "buckets")&.map { |b| { slug: b["key"], count: b["doc_count"] } } || [],
       status_count: response.dig("aggregations", "status_count", "buckets")&.map { |b| { status: b["key"], count: b["doc_count"] } } || []
     }
+  end
+  
+  def self.delete(product_id)
+    ELASTICSEARCH_CLIENT.delete(index: INDEX_NAME, id: product_id)
+  rescue Elasticsearch::Transport::Transport::Errors::NotFound
+    puts "Document #{product_id} not found, skip delete"
   end
 end
