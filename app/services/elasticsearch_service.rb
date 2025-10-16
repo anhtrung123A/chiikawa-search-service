@@ -29,7 +29,7 @@ class ElasticsearchService
           properties: {
             id: { type: "keyword" },
             price: { type: "integer" },
-            name: { type: "text", analyzer: "autocomplete", search_analyzer: "standard" },
+            name: { type: "text", analyzer: "autocomplete", search_analyzer: "standard", fields: {keyword: { type: "keyword", ignore_above: 256 }} },
             images: { type: "keyword" },
             categories: {
               type: "nested",
