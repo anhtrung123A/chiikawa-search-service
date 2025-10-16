@@ -71,8 +71,8 @@ class ElasticsearchService
 
   def self.search_products(
     name: nil,
-    category_slug: nil,
-    character_slug: nil,
+    category_slugs: [],
+    character_slugs: [],
     min_price: nil,
     max_price: nil,
     status: nil,
@@ -84,30 +84,40 @@ class ElasticsearchService
     from = (page - 1) * limit
     must_clauses = []
 
-    # Name fuzzy search
+    # --- Name fuzzy search ---
     must_clauses << { match: { name: { query: name, fuzziness: "AUTO" } } } if name.present?
 
-    # Category filter (nested)
-    if category_slug.present?
+    # --- Category filter (nested, multiple) ---
+    if category_slugs.present?
       must_clauses << {
         nested: {
           path: "categories",
-          query: { term: { "categories.slug": category_slug } }
+          query: {
+            bool: {
+              should: category_slugs.map { |slug| { term: { "categories.slug": slug } } },
+              minimum_should_match: 1
+            }
+          }
         }
       }
     end
 
-    # Character filter (nested)
-    if character_slug.present?
+    # --- Character filter (nested, multiple) ---
+    if character_slugs.present?
       must_clauses << {
         nested: {
           path: "characters",
-          query: { term: { "characters.slug": character_slug } }
+          query: {
+            bool: {
+              should: character_slugs.map { |slug| { term: { "characters.slug": slug } } },
+              minimum_should_match: 1
+            }
+          }
         }
       }
     end
 
-    # Price range filter
+    # --- Price range filter ---
     if min_price.present? || max_price.present?
       range_query = {}
       range_query[:gte] = min_price if min_price.present?
@@ -115,14 +125,14 @@ class ElasticsearchService
       must_clauses << { range: { price: range_query } }
     end
 
-    # Status filter
+    # --- Status filter ---
     must_clauses << { term: { status: status } } if status.present?
 
-    # Build sort
+    # --- Sort ---
     sort_clause = []
     if sort_by.present?
       field = case sort_by.to_sym
-              when :name then "name.keyword"       # keyword để sort A-Z / Z-A
+              when :name then "name.keyword"
               when :price then "price"
               when :created_at then "created_at"
               else nil
@@ -130,15 +140,42 @@ class ElasticsearchService
       sort_clause << { field => { order: sort_order } } if field
     end
 
-    # Elasticsearch query with nested aggregations
+    # --- 1️⃣ Get all unique slugs across the entire index ---
+    all_keys = ELASTICSEARCH_CLIENT.search(
+      index: INDEX_NAME,
+      body: {
+        size: 0,
+        aggs: {
+          all_characters: {
+            nested: { path: "characters" },
+            aggs: {
+              by_slug: { terms: { field: "characters.slug", size: 10_000 } }
+            }
+          },
+          all_categories: {
+            nested: { path: "categories" },
+            aggs: {
+              by_slug: { terms: { field: "categories.slug", size: 10_000 } }
+            }
+          },
+          all_statuses: {
+            terms: { field: "status", size: 100 }
+          }
+        }
+      }
+    )
+
+    all_characters = all_keys.dig("aggregations", "all_characters", "by_slug", "buckets")&.map { |b| b["key"] } || []
+    all_categories = all_keys.dig("aggregations", "all_categories", "by_slug", "buckets")&.map { |b| b["key"] } || []
+    all_statuses   = all_keys.dig("aggregations", "all_statuses", "buckets")&.map { |b| b["key"] } || []
+
+    # --- 2️⃣ Run filtered query ---
     response = ELASTICSEARCH_CLIENT.search(
       index: INDEX_NAME,
       body: {
         from: from,
         size: limit,
-        query: {
-          bool: { must: must_clauses }
-        },
+        query: { bool: { must: must_clauses } },
         sort: sort_clause,
         aggs: {
           characters_count: {
@@ -160,16 +197,31 @@ class ElasticsearchService
       }
     )
 
+    # --- 3️⃣ Merge counts: keep all keys, fill missing with 0 ---
+    chars_raw = response.dig("aggregations", "characters_count", "by_slug", "buckets") || []
+    cats_raw  = response.dig("aggregations", "categories_count", "by_slug", "buckets") || []
+    stat_raw  = response.dig("aggregations", "status_count", "buckets") || []
+
+    char_map = chars_raw.to_h { |b| [b["key"], b["doc_count"]] }
+    cat_map  = cats_raw.to_h  { |b| [b["key"], b["doc_count"]] }
+    stat_map = stat_raw.to_h  { |b| [b["key"], b["doc_count"]] }
+
+    characters_count = all_characters.map { |slug| { slug: slug, count: char_map[slug] || 0 } }
+    categories_count = all_categories.map { |slug| { slug: slug, count: cat_map[slug] || 0 } }
+    status_count     = all_statuses.map   { |status| { status: status, count: stat_map[status] || 0 } }
+
+    # --- Final result ---
     {
       results: response["hits"]["hits"].map { |hit| hit["_source"] },
       total: response["hits"]["total"]["value"],
       page: page,
       limit: limit,
-      characters_count: response.dig("aggregations", "characters_count", "by_slug", "buckets")&.map { |b| { slug: b["key"], count: b["doc_count"] } } || [],
-      categories_count: response.dig("aggregations", "categories_count", "by_slug", "buckets")&.map { |b| { slug: b["key"], count: b["doc_count"] } } || [],
-      status_count: response.dig("aggregations", "status_count", "buckets")&.map { |b| { status: b["key"], count: b["doc_count"] } } || []
+      characters_count: characters_count,
+      categories_count: categories_count,
+      status_count: status_count
     }
   end
+
   
   def self.delete(product_id)
     ELASTICSEARCH_CLIENT.delete(index: INDEX_NAME, id: product_id)
