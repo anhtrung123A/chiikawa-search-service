@@ -1,4 +1,10 @@
 ELASTICSEARCH_CLIENT = Elasticsearch::Client.new(
-  url: ENV.fetch('ELASTICSEARCH_URL', 'http://localhost:9200'),
+  hosts: [
+    {
+      host: ENV['ELASTICSEARCH_HOST'] || 'localhost',
+      port: (ENV['ELASTICSEARCH_PORT'] || 9200).to_i,
+      scheme: 'http',
+    }
+  ],
   log: true
 )
