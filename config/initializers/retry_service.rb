@@ -15,5 +15,5 @@ def wait_for_service(host, port, retries: 10, delay: 3)
   end
 end
 
-wait_for_service(ENV['ELASTICSEARCH_HOST'] || 'localhost', 9200, retries: 15, delay: 2)
+wait_for_service(ENV['POSTGRES_HOST'] || 'localhost', 5432, retries: 15, delay: 2)
 wait_for_service(ENV['RABBITMQ_HOST'] || 'localhost', 5672, retries: 15, delay: 2)
