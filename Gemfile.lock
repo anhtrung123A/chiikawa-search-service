@@ -99,10 +99,10 @@ GEM
     elastic-transport (8.4.1)
       faraday (< 3)
       multi_json
-    elasticsearch (8.19.1)
+    elasticsearch (9.2.0)
       elastic-transport (~> 8.3)
-      elasticsearch-api (= 8.19.1)
-    elasticsearch-api (8.19.1)
+      elasticsearch-api (= 9.2.0)
+    elasticsearch-api (9.2.0)
       multi_json
     erb (5.1.1)
     erubi (1.13.1)
@@ -123,7 +123,7 @@ GEM
       pp (>= 0.6.0)
       rdoc (>= 4.0.0)
       reline (>= 0.4.2)
-    json (2.15.1)
+    json (2.15.2)
     kamal (2.7.0)
       activesupport (>= 7.0)
       base64 (~> 0.2)
@@ -322,7 +322,7 @@ DEPENDENCIES
   brakeman
   bunny
   debug
-  elasticsearch (~> 8.15)
+  elasticsearch (~> 9.2)
   faraday
   foreman
   kamal

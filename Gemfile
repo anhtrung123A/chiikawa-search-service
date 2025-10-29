@@ -41,4 +41,4 @@ group :development, :test do
   gem "rubocop-rails-omakase", require: false
 end
 
-gem "elasticsearch", "~> 8.15"
+gem "elasticsearch", "~> 9.2"
